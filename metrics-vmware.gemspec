@@ -28,4 +28,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency 'optimist'
+  spec.add_dependency 'rbvmomi'
+
+  spec.add_development_dependency 'awsome_print'
 end
