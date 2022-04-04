@@ -12,8 +12,9 @@ module Metrics;
     class VmwareCollector
 
         attr_reader :log, 
-                    :connection, 
+                    :connect, 
                     :options,
+                    :inv,
                     :si,
                     :content,
                     :perfman,
@@ -22,19 +23,24 @@ module Metrics;
                     :root
 
         def initialize
-            @options = get_vcenter_options()
-            @log = Logger.new(STDOUT)
-            @connect = make_connection()
-            ap @si
+            @options   = get_vcenter_options()
+            @log       = Logger.new(STDOUT)
+            @connect   = make_connection()
+            @si        = @connect.serviceInstance
+            @content   = @si.content
+            @perfman   = @content.perfManager
+            @viewman   = @content.viewManager
+            @uuid      = @content.about.props[:instanceUuid].downcase
+            @root      = @content.rootFolder
+            @inv       = get_inventory()
         end
 
-        def connection_setup
-            @svci,         = @connect.serviceInstance
-            @content    = @si.content
-            @perfman    = @content.perfManager
-            @viewman    = @content.viewManager
-            @uuid       = @content.about.props[:instanceUuid].downcase
-            @root       = @content.rootFolder
+        def close
+            connect.close
+        end
+
+        def available_metrics(mo)
+            @perfman.QueryAvailablePerfMetric( { entity: mo } )
         end
 
         def get_vcenter_options
@@ -51,7 +57,7 @@ module Metrics;
         end              
 
         def make_connection
-            @connection = RbVmomi::VIM.connect(
+            connection = RbVmomi::VIM.connect(
                 host: options.server,
                 user: options.user,
                 password: options.password,
@@ -61,6 +67,36 @@ module Metrics;
 
         def collect
             log.info("Starting VMware Collector")
+            require 'debug'
+            puts :DEBUGGING
+        end
+
+        def get_inventory
+            ret = Set.new
+            ret += get_objects(root,[], true)
+            return ret.to_a
+        end
+
+        def get_objects(obj,type,recursive)
+            viewman.CreateContainerView( {
+                 type: type,
+                 container: obj,
+                 recursive: recursive 
+            } ).view.map{ |o| o }
+        end
+
+
+        def make_query_spec()
+            ret << RbVmomi::VIM::PerfQuerySpec(
+                :entity     => entity,
+                # :intervalId => @sample_seconds.to_s,
+                # :startTime  => starttime,
+                # :endTime    => endtime,
+                :metricId   => [
+                    RbVmomi::VIM::PerfMetricId
+                ]
+            )
+            return ret
         end
 
     end

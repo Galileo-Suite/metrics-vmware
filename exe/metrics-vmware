@@ -2,7 +2,8 @@
 
 require 'metrics/vmware/collector'
 require 'optimist'
-
+require 'yaml'
 
 vmc = Metrics::VmwareCollector.new
-vmc.collect
+# vmc.collect
+vmc.close
