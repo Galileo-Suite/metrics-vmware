@@ -1,2 +1,16 @@
-!/usr/bin/env ruby
+#!/usr/bin/env ruby
+
+require 'metrics/vmware/base'
+require 'optimist'
+
+
+opts = Optimist::options do
+  opt :server, "vCenter IP or FQN", :type => :string
+  opt :port, "Port", :type => :integer, :default => 443
+  opt :objects, "Objects to Collect", :type => :strings, :default => %w[vm]
+end
+
+
+vmc = Metrics::VmwareCollector.new
+
 

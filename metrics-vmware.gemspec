@@ -8,7 +8,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = %q{Get VMware metrics from vCenter}
   spec.description   = %q{Use the vsphere API to pull metrics using Ruby}
-  spec.homepage      = "github.com/vgcrld/metrics-vmware"
+  spec.homepage      = "https://github.com/vgcrld/metrics-vmware"
   spec.license       = "MIT"
   spec.required_ruby_version = Gem::Requirement.new(">= 2.3.0")
 
@@ -25,6 +25,7 @@ Gem::Specification.new do |spec|
   end
   spec.bindir        = "exe"
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
-  pp spec.executables
   spec.require_paths = ["lib"]
+
+  spec.add_dependency 'optimist'
 end
