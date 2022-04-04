@@ -29,6 +29,6 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'optimist'
   spec.add_dependency 'rbvmomi'
-
-  spec.add_development_dependency 'awsome_print'
+  spec.add_dependency 'awesome_print'
+  
 end
