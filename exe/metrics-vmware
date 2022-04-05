@@ -5,6 +5,4 @@ require 'optimist'
 require 'yaml'
 require 'awesome_print'
 
-vm = Metrics::VmwareCollector.new()
-vm.do()
-vm.close()
+vm = Metrics::VmwareCollector.new

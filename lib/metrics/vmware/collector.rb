@@ -6,14 +6,15 @@ require 'logger'
 require 'fileutils'
 require 'awesome_print'
 require 'byebug'
+require 'json'
 
 require 'metrics/vmware/version'
 module Metrics;
 
     class VmwareCollector
 
-        attr_reader :log, 
-                    :connect, 
+        attr_reader :log,
+                    :connect,
                     :options,
                     :inv,
                     :si,
@@ -26,6 +27,79 @@ module Metrics;
                     :perfids
 
         def initialize
+            setup()
+            status()
+            run()
+            close()
+        end
+
+
+        def get_command_options
+            opts = Optimist::options do
+                opt :server, "vCenter IP or FQN", :type => :string, :required => true
+                opt :user, "vCenter User", :type => :string
+                opt :password, "Password", :type => :string
+                opt :port, "Port", :type => :integer, :default => 443
+                opt :id, "Metrics to Get (Regexp `name`)", :type => :string, :default => '^(cpu|mem)\.usage\.average'
+                opt :get, "Get the Perf data", :type => :flag
+                opt :show, "Show the Perf IDs", :type => :flag
+                opt :file, "Output json file", :type => :string, :default => File.join(ENV['HOME'],"vmware-#{Time.now.to_i}.json")
+            end
+            return opts
+        end
+
+        def run
+            log.info("Starting VMware Collector")
+            case
+            when options[:show_given]
+                log.info("Show performance counter IDs by (regexp) name.")
+                list = get_counters()
+                list.each{ |x,y| printf("%10s   %s\n",x,y) }
+            when options[:get_given]
+                log.info("Show performance data by (regexp) name.")
+                pi = get_counters().keys
+                qry = make_query_spec([hosts, vms],pi)
+                results = run_query(qry)
+                write_results(results)
+            else
+                log.info("Need something to do. Try `--get` or `--show`")
+            end
+            return self
+        end
+
+        def run_query(qry)
+            ret = []
+            raise "qry param must be an array" unless qry.is_a?(Array)
+            results = perfman.QueryPerf( { querySpec: qry } ) # RbVmomi::VIM::PerfEntityMetric
+            results.each do |result|
+                ret2 = {}
+                ret2.store(:entity, result.entity.name)
+                ret2.store(:timestamps, result.sampleInfo.map{ |x| x.props[:timestamp] })
+                result.value.each do |vals|
+                    counter = vals[:id].props[:counterId]
+                    metric = perfids[counter]
+                    ret2.store(metric, {
+                        inst: vals[:id].props[:instance],
+                        values: vals.value
+                    })
+                end
+                ret << ret2
+            end
+            return ret
+        end
+
+        def close
+            connect.close
+        end
+
+        private
+
+        def write_results(results)
+            f = File.new(options.file,'w')
+            f.write(results.to_json)
+            f.close
+        end
+        def setup
             @log       = Logger.new(STDOUT)
             @options   = get_command_options()
             @connect   = make_connection()
@@ -36,33 +110,13 @@ module Metrics;
             @root      = @content.rootFolder
             @inv       = get_inventory()
             @refs      = make_refs()
-            @counters  = perfman.perfCounter()
-            @perfids   = get_counters_by_key()
-            status()
+            @perfids, @counters = get_counters_by_key()
         end
-
-        def do
-            log.info("Starting VMware Collector")
-            case
-            when options[:search_given]
-                log.info("Search for performance counters")
-                get_counters()
-            else
-                log.info("Something else")
-            end
-            return nil
-        end
-
-        def close
-            connect.close
-        end
-
-        private
 
         def get_counters
-            regexp = options[:search].nil? ? // : Regexp.new(options[:search])
+            regexp = options[:id].nil? ? // : Regexp.new(options[:id])
             list = get_perf_ids_by_regex(regexp)
-            list.each{ |x,y| printf("%10s   %s\n",x,y) }
+            return list
         end
 
         def status
@@ -74,7 +128,7 @@ module Metrics;
         end
 
         def get_counters_by_key
-            ret = {}
+            ret1, ret2 = {}, {}
             perfman.perfCounter.map do |c|
                 props = c.props
                 nameinfo = props[:nameInfo].props
@@ -85,9 +139,10 @@ module Metrics;
                 rollup = props[:rollupType]
                 full = "#{type}.#{name}.#{rollup}"
                 key = props[:key]
-                ret[key] = full
+                ret1[key] = full
+                ret2[key] = c
             end
-            return ret
+            return [ ret1, ret2 ]
         end
 
         def get_perf_ids_by_regex(regex=//)
@@ -118,7 +173,7 @@ module Metrics;
         def make_refs
             log.info("Makeing Reference Maps")
             ret = {}
-            inv.each do |mo| 
+            inv.each do |mo|
                 name = mo.name
                 moid = mo.to_s.split('"')[1]
                 type = moid.split('-',2).first
@@ -132,26 +187,14 @@ module Metrics;
         end
 
         def get_ref_idx_by_class(type=:VirtualMachine)
-            refs.values.each_with_index.map do |x,i| 
+            refs.values.each_with_index.map do |x,i|
                 i if x[:class] == type
             end.compact
         end
-        
+
         def available_metrics(mo)
             @perfman.QueryAvailablePerfMetric( { entity: mo } )
         end
-
-        def get_command_options
-            opts = Optimist::options do
-                opt :server, "vCenter IP or FQN", :type => :string, :required => true
-                opt :user, "vCenter User", :type => :string
-                opt :password, "Password", :type => :string
-                opt :port, "Port", :type => :integer, :default => 443
-                opt :object, "Object to Collect", :type => :string, :default => 'vm'
-                opt :search, "Search Metric IDs", :type => :string, :devault => ''
-            end
-            return opts
-        end              
 
         def make_connection
             connection = RbVmomi::VIM.connect(
@@ -172,7 +215,7 @@ module Metrics;
             viewman.CreateContainerView( {
                  type: type,
                  container: obj,
-                 recursive: recursive 
+                 recursive: recursive
             } ).view.map{ |o| o }
         end
 
@@ -180,14 +223,19 @@ module Metrics;
             perf.QueryPerf( { querySpec: specs })
         end
 
-        def make_query_spec(entity,perf_metric_ids)
-            ret << RbVmomi::VIM::PerfQuerySpec(
-                :entity     => entity,
-                :metricId   => perf_metric_ids
-                # :intervalId => @sample_seconds.to_s,
-                # :startTime  => starttime,
-                # :endTime    => endtime,
-            )
+        def make_query_spec(entities,counter_ids,instance="")
+            ret = []
+            entities.flatten.each do |ent|
+                interval = perfman.QueryPerfProviderSummary( { entity: ent } ).refreshRate
+                perf_metric_ids = counter_ids.map{ |x| RbVmomi::VIM::PerfMetricId( {counterId: x, instance: instance } ) }
+                ret << RbVmomi::VIM::PerfQuerySpec(
+                    :entity     => ent,
+                    :metricId   => perf_metric_ids,
+                    :intervalId => interval
+                    # :startTime  => starttime,
+                    # :endTime    => endtime,
+                )
+            end 
             return ret
         end
 
