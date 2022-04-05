@@ -6,5 +6,5 @@ require 'yaml'
 require 'awesome_print'
 
 vm = Metrics::VmwareCollector.new()
-vm.collect()
+vm.do()
 vm.close()

@@ -5,6 +5,7 @@ require 'optparse'
 require 'logger'
 require 'fileutils'
 require 'awesome_print'
+require 'byebug'
 
 require 'metrics/vmware/version'
 module Metrics;
@@ -21,7 +22,8 @@ module Metrics;
                     :viewman,
                     :root,
                     :refs,
-                    :counters
+                    :counters,
+                    :perfids
 
         def initialize
             @log       = Logger.new(STDOUT)
@@ -34,10 +36,35 @@ module Metrics;
             @root      = @content.rootFolder
             @inv       = get_inventory()
             @refs      = make_refs()
-            @counters  = get_counters_by_key()
+            @counters  = perfman.perfCounter()
+            @perfids   = get_counters_by_key()
             status()
         end
-        
+
+        def do
+            log.info("Starting VMware Collector")
+            case
+            when options[:search_given]
+                log.info("Search for performance counters")
+                get_counters()
+            else
+                log.info("Something else")
+            end
+            return nil
+        end
+
+        def close
+            connect.close
+        end
+
+        private
+
+        def get_counters
+            regexp = options[:search].nil? ? // : Regexp.new(options[:search])
+            list = get_perf_ids_by_regex(regexp)
+            list.each{ |x,y| printf("%10s   %s\n",x,y) }
+        end
+
         def status
             log.info("Object Counts")
             log.info("Virtual Machines: #{vms.length}")
@@ -63,10 +90,9 @@ module Metrics;
             return ret
         end
 
-        def collect
-            log.info("Starting VMware Collector")
-            require 'debug'
-            puts :DEBUGGING
+        def get_perf_ids_by_regex(regex=//)
+            ret = perfids.select{ |x,y| y =~ regex }
+            return ret
         end
 
         def hosts
@@ -88,12 +114,6 @@ module Metrics;
             idx = get_ref_idx_by_class(:ClusterComputeResource)
             return inv.values_at(*idx)
         end
-
-        def close
-            connect.close
-        end
-
-        private
 
         def make_refs
             log.info("Makeing Reference Maps")
@@ -128,6 +148,7 @@ module Metrics;
                 opt :password, "Password", :type => :string
                 opt :port, "Port", :type => :integer, :default => 443
                 opt :object, "Object to Collect", :type => :string, :default => 'vm'
+                opt :search, "Search Metric IDs", :type => :string, :devault => ''
             end
             return opts
         end              
@@ -155,16 +176,17 @@ module Metrics;
             } ).view.map{ |o| o }
         end
 
+        def get_performace_data(specs)
+            perf.QueryPerf( { querySpec: specs })
+        end
 
-        def make_query_spec(entity)
+        def make_query_spec(entity,perf_metric_ids)
             ret << RbVmomi::VIM::PerfQuerySpec(
                 :entity     => entity,
+                :metricId   => perf_metric_ids
                 # :intervalId => @sample_seconds.to_s,
                 # :startTime  => starttime,
                 # :endTime    => endtime,
-                :metricId   => [
-                    RbVmomi::VIM::PerfMetricId
-                ]
             )
             return ret
         end
