@@ -3,7 +3,8 @@
 require 'metrics/vmware/collector'
 require 'optimist'
 require 'yaml'
+require 'awesome_print'
 
-vmc = Metrics::VmwareCollector.new
-# vmc.collect
-vmc.close
+vm = Metrics::VmwareCollector.new()
+vm.collect()
+vm.close()
