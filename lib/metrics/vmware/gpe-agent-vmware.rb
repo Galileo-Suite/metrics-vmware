@@ -1338,6 +1338,8 @@ class VMWareCollector
     return data
   end
 
+  # Perf = performance manager
+  # query_specs = 
   def collect_performance_data(perf, query_specs, type)
     error_count = 0
     data = Array.new
