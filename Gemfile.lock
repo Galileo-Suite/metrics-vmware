@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    metrics-vmware (0.1.0)
+    metrics-vmware (0.2.0)
       awesome_print
       optimist
       rbvmomi
