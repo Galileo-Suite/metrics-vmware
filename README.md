@@ -4,19 +4,13 @@ Ruby script/gem to capture VMware vCenter performace metrics.
 
 ## Installation
 
-Add this line to your application's Gemfile:
+Clone this repo
 
-```ruby
-gem 'metrics-vmware'
+```bash
+cd metrics-vmware
+bundle install
+bundle exec metrics-vmware --help
 ```
-
-And then execute:
-
-    $ bundle install
-
-Or install it yourself as:
-
-    $ gem install metrics-vmware
 
 ## Usage
 
